@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -12,9 +13,6 @@ const taskRoutes = require('./Routes/taskRoutes');
 const errorHandler = require('./Middlewares/errorHandler');
 
 const app = express();
-
-// Connect to MongoDB
-connectDB();
 
 // Security middleware
 app.use(helmet());
@@ -43,14 +41,34 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser(process.env.COOKIE_SECRET));
 
-// Health check endpoint
+// Assuming connectDB returns a mongoose connection or a promise:
+
+
+// Health check endpoint with more detailed status
 app.get('/health', (req, res) => {
+  const mongoState = mongoose.connection.readyState;
+  // 0 = disconnected, 1 = connected, 2 = connecting, 3 = disconnecting
+
+  let mongoStatus = 'disconnected';
+  switch (mongoState) {
+    case 0: mongoStatus = 'disconnected'; break;
+    case 1: mongoStatus = 'connected'; break;
+    case 2: mongoStatus = 'connecting'; break;
+    case 3: mongoStatus = 'disconnecting'; break;
+  }
+
   res.status(200).json({
     status: 'success',
     message: 'Server is running',
+    mongoConnectionStatus: mongoStatus,
     timestamp: new Date().toISOString()
   });
 });
+
+// Start server only after connecting to MongoDB
+
+
+
 
 // API Routes
 app.use('/api/auth', authRoutes);
@@ -68,10 +86,14 @@ app.all('*', (req, res) => {
 app.use(errorHandler);
 
 const PORT = process.env.PORT || 5000;
-
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📊 Health check: http://localhost:${PORT}/health`);
+connectDB().then(() => {
+  app.listen(PORT, () => {
+    console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`📊 Health check: http://localhost:${PORT}/health`);
+  });
+}).catch(err => {
+  console.error('Failed to connect to MongoDB', err);
+  process.exit(1); // Exit process if db connection fails
 });
 
 module.exports = app;
